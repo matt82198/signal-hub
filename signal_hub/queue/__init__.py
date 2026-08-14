@@ -10,6 +10,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from signal_hub.clock import system_now
+
 
 def parse_ttl(ttl_str: str) -> timedelta:
     """Parse TTL string like '2d', '3h', '1h' to timedelta."""
@@ -27,7 +29,7 @@ def parse_ttl(ttl_str: str) -> timedelta:
 
 def iso_ts_now() -> str:
     """Get current ISO timestamp (UTC) for task IDs."""
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return system_now().strftime("%Y%m%dT%H%M%SZ")
 
 
 def enqueue_task(
@@ -57,7 +59,7 @@ def enqueue_task(
         task_id in format {ISO ts}-{rule_id}-{event_id[:8]}
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = system_now()
 
     # Parse TTL and compute expires_at
     ttl_delta = parse_ttl(ttl)
@@ -130,7 +132,7 @@ def claim_task(
         Task dict with status=claimed, or None if lost race or expired
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = system_now()
 
     pending_path = queue_dir / "pending" / task_filename
     claimed_path = queue_dir / "claimed" / task_filename

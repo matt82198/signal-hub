@@ -10,6 +10,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from signal_hub.clock import system_now
+
 
 def write_hub_status(
     state_dir: Path,
@@ -35,7 +37,7 @@ def write_hub_status(
         last_tick: Tick start time (defaults to now)
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = system_now()
 
     if last_tick is None:
         last_tick = now

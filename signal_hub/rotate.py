@@ -9,6 +9,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from signal_hub.clock import system_now
+
 
 # Thresholds per cardinal rules
 MAX_LINES = 200
@@ -51,7 +53,7 @@ def rotate_log(
         now: Injected clock (defaults to now)
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = system_now()
 
     if not log_path.exists():
         return
@@ -94,7 +96,7 @@ def prune_archives(
         now: Injected clock (defaults to now)
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = system_now()
 
     if not archive_dir.exists():
         return
