@@ -15,6 +15,14 @@ Actions are returned as data.  Dispatching them (writing task files into
 ``queue/``) belongs to the queue lane, not here.
 """
 
+from .durations import (
+    DEFAULT_WINDOW,
+    WINDOWS,
+    bucket_id,
+    format_timestamp,
+    parse_duration,
+    parse_window,
+)
 from .errors import (
     DurationError,
     PathError,
@@ -26,9 +34,11 @@ from .errors import (
 from .paths import MISSING, is_path, resolve_path, validate_path
 from .predicates import COMPARATORS, LOGICAL, OPERATORS, compile_predicate
 from .template import collect_placeholders, render_template
+from .throttle import ThrottleState
 
 __all__ = [
     "COMPARATORS",
+    "DEFAULT_WINDOW",
     "DurationError",
     "LOGICAL",
     "MISSING",
@@ -38,9 +48,15 @@ __all__ = [
     "RuleValidationError",
     "RulesError",
     "TemplateError",
+    "ThrottleState",
+    "WINDOWS",
+    "bucket_id",
     "collect_placeholders",
     "compile_predicate",
+    "format_timestamp",
     "is_path",
+    "parse_duration",
+    "parse_window",
     "render_template",
     "resolve_path",
     "validate_path",
