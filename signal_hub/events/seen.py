@@ -36,7 +36,7 @@ class SeenIndex:
     """Date-partitioned set of event ids already recorded.
 
     `clock` is a required injected callable (design section 7: no lane calls
-    `datetime.now()`); the window and the prune horizon are both clock-relative and
+    ambient time); the window and the prune horizon are both clock-relative and
     have to be testable at any date.
     """
 

@@ -45,7 +45,7 @@ class EventLog:
     """Append-only JSONL event log rooted at a signal-hub `state/` directory.
 
     `clock` is a required injected callable returning the current datetime -- no lane
-    calls `datetime.now()` (design section 7), and a log whose retention is untestable
+    calls ambient time (design section 7), and a log whose retention is untestable
     at a date boundary is not shippable.
     """
 

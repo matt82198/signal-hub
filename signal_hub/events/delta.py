@@ -1,7 +1,7 @@
 """Delta engine: snapshot n-1 vs snapshot n -> typed events (design section 3, lane L4).
 
 Pure functions. No I/O, no clock of its own -- `now` is always injected, per the
-design's non-negotiable rule that no lane calls `datetime.now()`.
+design's non-negotiable rule that no lane calls ambient time (design section 7).
 
 SNAPSHOT PAYLOAD CONTRACT
 -------------------------
