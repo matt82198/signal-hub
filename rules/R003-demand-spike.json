@@ -1,0 +1,30 @@
+{
+  "rule_id": "R003-demand-spike",
+  "enabled": true,
+  "why": "A sharp move in trend-indicator's ranking is a steer on what to make next, not an instruction to make something; it belongs in a human's content-mix decision, not in the task queue.",
+  "notes": "signal-hub owns zero scoring math: delta and score are trend-indicator's numbers, snapshotted. The phase filter is written as 'not PRE' rather than 'in [REG, POST]' because demand events carry no game_type at all, and a positive filter would silently suppress every one of them (a MISSING path never satisfies a comparison).",
+  "on": {
+    "type": "demand_rank_delta",
+    "where": {
+      "all": [
+        {">=": ["event.payload.delta", 0.15]},
+        {">=": ["event.payload.score", 0.6]},
+        {"not": {"in": ["event.payload.game_type", ["PRE"]]}}
+      ]
+    }
+  },
+  "throttle": {
+    "key": ["rule_id", "event.entities.opportunity.id"],
+    "window": "1d"
+  },
+  "action": {
+    "kind": "notify",
+    "priority": 40,
+    "ttl": "1d",
+    "task": {
+      "kind": "notify",
+      "target": "state/INBOX-OUT.md",
+      "message": "content-mix steer: demand for {{event.entities.opportunity.id}} moved +{{event.payload.delta}} to score {{event.payload.score}}"
+    }
+  }
+}
