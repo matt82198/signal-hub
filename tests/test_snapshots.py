@@ -68,9 +68,10 @@ class TestWrite(SnapshotCase):
             self.store.write("src", status="ERROR")
 
     def test_utf8_payload_round_trips(self):
-        path = self.store.write("src", payload={"name": "Björn"})
+        name = "Bj" + chr(0xF6) + "rn"  # non-ASCII data; ASCII source
+        path = self.store.write("src", payload={"name": name})
         doc = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(doc["payload"]["name"], "Björn")
+        self.assertEqual(doc["payload"]["name"], name)
 
     def test_same_second_writes_get_unique_monotonic_names(self):
         p1 = self.store.write("src", payload={"n": 1})
