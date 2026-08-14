@@ -8,18 +8,24 @@ SNAPSHOT PAYLOAD CONTRACT
 L4 is contract-driven: it never imports an adapter. These are the payload shapes it
 destructures, and the single place L7's tail-drift check should compare against.
 
-  nflverse_schedules  {"games": [{"game_id", "season", "week", "game_type",
-                                  "gameday", "gametime", "weekday",
+  nflverse_schedules  {"games": [{"game_id", "season", "week", "phase"|"game_type",
+                                  "gameday", "gametime",
                                   "away_team", "home_team",
-                                  "away_score", "home_score", "overtime"}, ...]}
-      Scores are None/"" until the game is settled; both present == final. This is
-      how nfldata's games.csv works -- it carries no status column.
+                                  "away_score", "home_score",
+                                  "final"?, "winner"?, "overtime"?}, ...]}
+      Scores are None/"" until the game is settled; both present == final, and an
+      explicit `final` flag is honoured when the adapter supplies one. This is how
+      nfldata's games.csv works -- it carries no status column.
 
-  nflverse_player_stats {"stats": [{"player_id", "player_name", "team", "game_id",
-                                    "season", "week", "game_type",
-                                    "passing_yards", "passing_tds",
-                                    "rushing_yards", "rushing_tds",
-                                    "receiving_yards", "receiving_tds"}, ...]}
+  nflverse_player_stats {"stat_lines": {"<player_id>|<game_id>": {...}}}
+                        or {"stats": [{...}, ...]}
+      Row: {"player_id", "player_name", "team", "game_id", "season", "week",
+            "phase"|"game_type", "passing_yards", "passing_tds", "rushing_yards",
+            "rushing_tds", "receiving_yards", "receiving_tds", "total_tds"?}
+
+  Both nflverse adapters spell the season phase `phase` (REG|PRE|POST) while the event
+  schema and every MVP rule spell it `game_type` (design sections 3 and 4). The bridge
+  between the two vocabularies lives here, once, rather than loose in the pipeline.
 
   trend_indicator     {"generated_at", "rankings": [{"opportunity", "score",
                                                      "confidence": "low|medium|high"}, ...]}
@@ -182,6 +188,15 @@ def _rows(payload: Any, key: str) -> list[dict]:
     return [row for row in rows if isinstance(row, dict)]
 
 
+def _game_type(row: dict) -> str | None:
+    """The season phase under any of the names the sources use for it."""
+    for key in ("game_type", "phase", "season_type"):
+        value = _text(row.get(key))
+        if value:
+            return value
+    return None
+
+
 def _entity(kind: str, ident: str, name: str | None = None) -> dict:
     entity: dict[str, Any] = {"kind": kind, "id": ident}
     if name:
@@ -308,9 +323,17 @@ def _game_scores(row: dict) -> tuple[Any, Any]:
 
 
 def _is_final(row: dict) -> bool:
-    """Both scores present == settled. One present is a partial/malformed row."""
+    """Both scores present == settled. One present is a partial/malformed row.
+
+    An adapter-supplied `final` flag can veto, but never conjure, a final: an event
+    whose payload carries no scores would be useless to a highlight rule anyway.
+    """
     away, home = _game_scores(row)
-    return away is not None and home is not None
+    if away is None or home is None:
+        return False
+    if "final" in row:
+        return _flag(row.get("final"))
+    return True
 
 
 def _index_games(payload: Any) -> dict[str, dict]:
@@ -357,7 +380,7 @@ def diff_schedules(prev_payload: Any, curr_payload: Any, now: datetime) -> list[
                 entities=entities,
                 payload={
                     "game_id": game_id,
-                    "game_type": _text(row.get("game_type")) or None,
+                    "game_type": _game_type(row),
                     "season": _num(row.get("season")),
                     "week": _num(row.get("week")),
                     "gameday": _text(row.get("gameday")) or None,
@@ -368,7 +391,9 @@ def diff_schedules(prev_payload: Any, curr_payload: Any, now: datetime) -> list[
                     "winner": winner,
                     "loser": loser,
                     "margin": abs(away_score - home_score),
-                    "overtime": _flag(row.get("overtime")),
+                    # absent is not False: a rule must be able to tell "no overtime"
+                    # from "this source does not carry overtime"
+                    "overtime": _flag(row["overtime"]) if "overtime" in row else None,
                 },
                 identity=(game_id,),
             )
@@ -380,9 +405,22 @@ def diff_schedules(prev_payload: Any, curr_payload: Any, now: datetime) -> list[
 # nflverse_player_stats -> player_stat_line
 # ---------------------------------------------------------------------------
 
+def _stat_rows(payload: Any) -> list[dict]:
+    """Stat lines from either shape: the shipped `stat_lines` mapping keyed by
+    "<player_id>|<game_id>", or a plain `stats` list. The mapping is walked in sorted
+    key order so the emitted batch does not depend on JSON key order."""
+    if isinstance(payload, dict):
+        lines = payload.get("stat_lines")
+        if isinstance(lines, dict):
+            return [row for _key, row in sorted(lines.items()) if isinstance(row, dict)]
+        if isinstance(lines, list):
+            return [row for row in lines if isinstance(row, dict)]
+    return _rows(payload, "stats")
+
+
 def _stat_keys(payload: Any) -> set[tuple[str, str]]:
     keys: set[tuple[str, str]] = set()
-    for row in _rows(payload, "stats"):
+    for row in _stat_rows(payload):
         player_id = _text(row.get("player_id"))
         game_id = _text(row.get("game_id"))
         if player_id and game_id:
@@ -400,7 +438,7 @@ def diff_player_stats(prev_payload: Any, curr_payload: Any, now: datetime) -> li
         return []
     seen = _stat_keys(prev_payload)
     events: list[Event] = []
-    for row in _rows(curr_payload, "stats"):
+    for row in _stat_rows(curr_payload):
         player_id = _text(row.get("player_id"))
         game_id = _text(row.get("game_id"))
         if not player_id or not game_id:
@@ -428,7 +466,7 @@ def diff_player_stats(prev_payload: Any, curr_payload: Any, now: datetime) -> li
                 confidence=SETTLED_CONFIDENCE,
                 entities=entities,
                 payload={
-                    "game_type": _text(row.get("game_type")) or None,
+                    "game_type": _game_type(row),
                     "season": _num(row.get("season")),
                     "week": _num(row.get("week")),
                     "passing_yards": passing_yards,
@@ -437,8 +475,14 @@ def diff_player_stats(prev_payload: Any, curr_payload: Any, now: datetime) -> li
                     "rushing_tds": rushing_tds,
                     "receiving_yards": receiving_yards,
                     "receiving_tds": receiving_tds,
-                    # derived so R002 can predicate on it without arithmetic in the DSL
-                    "total_tds": passing_tds + rushing_tds + receiving_tds,
+                    # R002 predicates on this and the DSL has no arithmetic. The
+                    # adapter's own count wins when present -- it also counts
+                    # special-teams scores, and two different numbers must never
+                    # travel under one name.
+                    "total_tds": _num(
+                        row.get("total_tds"),
+                        passing_tds + rushing_tds + receiving_tds,
+                    ),
                 },
                 identity=key,
             )

@@ -526,6 +526,158 @@ def test_from_dict_can_skip_verification_for_forensic_reads():
     assert delta.Event.from_dict(d, verify=False).event_id == "0" * 16
 
 
+# --------------------------------------------------------------------------
+# tail-drift: the payload shapes L2/L3 actually shipped (design section 7 note --
+# "L7 merges last after a tail-drift check that L2/L3 payload shapes match what L4's
+# diff functions actually destructure"). Fixtures below are copied from the merged
+# adapters' own docstrings, not from this lane's assumptions.
+# --------------------------------------------------------------------------
+
+def l2_game(**over):
+    """nflverse_schedules row as merged: `phase`, not `game_type`; explicit `final`
+    and `winner`; no `overtime` column."""
+    row = {
+        "game_id": "2026_02_CHI_DET",
+        "season": 2026,
+        "week": 2,
+        "phase": "REG",
+        "gameday": "2026-09-14",
+        "gametime": "20:15",
+        "home_team": "DET",
+        "away_team": "CHI",
+        "home_score": None,
+        "away_score": None,
+        "final": False,
+        "winner": None,
+    }
+    row.update(over)
+    return row
+
+
+def l2_schedules(*rows):
+    return {
+        "games": list(rows),
+        "skipped_rows": 0,
+        "row_count": len(rows),
+        "source_url": "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv",
+    }
+
+
+def l2_stat_line(player_id="00-0036322", game_id="2026_02_CHI_DET", **over):
+    line = {
+        "player_id": player_id,
+        "player_name": "Justin Fields",
+        "position": "QB",
+        "team": "CHI",
+        "opponent_team": "DET",
+        "season": 2026,
+        "week": 2,
+        "phase": "REG",
+        "game_id": game_id,
+        "completions": 22,
+        "attempts": 30,
+        "passing_yards": 312,
+        "passing_tds": 3,
+        "carries": 7,
+        "rushing_yards": 44,
+        "rushing_tds": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "special_teams_tds": 0,
+        "total_tds": 3,
+    }
+    line.update(over)
+    return line
+
+
+def l2_stats(*lines):
+    """Payload keys stat lines by "<player_id>|<game_id>" in a DICT, not a list."""
+    return {
+        "season": 2026,
+        "stat_lines": {
+            "%s|%s" % (line["player_id"], line["game_id"]): line for line in lines
+        },
+        "row_count": len(lines),
+        "skipped_rows": 0,
+        "source_url": "https://example.invalid/stats_player_week_2026.csv",
+    }
+
+
+def test_game_final_reads_the_adapters_phase_as_game_type():
+    """The event schema and both MVP game rules speak `game_type` (design section 3/4);
+    the adapter spells the same value `phase`. The engine bridges the two names once,
+    here, instead of leaving two vocabularies loose in the pipeline."""
+    ev = delta.diff_schedules(
+        l2_schedules(l2_game()),
+        l2_schedules(l2_game(home_score=21, away_score=24, final=True, winner="CHI")),
+        NOW,
+    )[0]
+    assert ev.payload["game_type"] == "REG"
+    assert ev.payload["winner"] == "CHI"
+    assert ev.payload["margin"] == 3
+
+
+def test_game_final_honours_an_explicit_final_flag():
+    prev = l2_schedules(l2_game(home_score=21, away_score=24, final=True, winner="CHI"))
+    curr = l2_schedules(l2_game(home_score=20, away_score=24, final=True, winner="CHI"))
+    assert delta.diff_schedules(prev, curr, NOW) == []
+
+
+def test_game_final_overtime_is_none_when_the_source_omits_it():
+    """Absent is not False -- a rule must be able to tell 'no overtime' from
+    'this source does not carry overtime'."""
+    ev = delta.diff_schedules(
+        l2_schedules(l2_game()),
+        l2_schedules(l2_game(home_score=21, away_score=24, final=True)),
+        NOW,
+    )[0]
+    assert ev.payload["overtime"] is None
+
+
+def test_player_stat_line_reads_the_adapters_keyed_stat_lines_mapping():
+    events = delta.diff_player_stats(l2_stats(), l2_stats(l2_stat_line()), NOW)
+    assert len(events) == 1
+    ev = events[0]
+    assert ev.identity == ("00-0036322", "2026_02_CHI_DET")
+    assert ev.payload["game_type"] == "REG"
+    assert ev.payload["passing_yards"] == 312
+    assert ev.payload["total_tds"] == 3
+
+
+def test_player_stat_line_prefers_the_adapters_own_total_tds():
+    """The adapter counts special-teams scores too; do not silently recompute a
+    different number under the same name."""
+    ev = delta.diff_player_stats(
+        l2_stats(),
+        l2_stats(l2_stat_line(special_teams_tds=1, total_tds=4)),
+        NOW,
+    )[0]
+    assert ev.payload["total_tds"] == 4
+
+
+def test_player_stat_line_correction_in_the_adapter_shape_does_not_refire():
+    prev = l2_stats(l2_stat_line(passing_yards=298))
+    curr = l2_stats(l2_stat_line(passing_yards=312))
+    assert delta.diff_player_stats(prev, curr, NOW) == []
+
+
+def test_player_stat_line_mapping_order_does_not_change_the_events():
+    a = l2_stat_line("00-0000001")
+    b = l2_stat_line("00-0000002")
+    forward = delta.diff_player_stats(l2_stats(), l2_stats(a, b), NOW)
+    backward = delta.diff_player_stats(l2_stats(), l2_stats(b, a), NOW)
+    assert [e.event_id for e in forward] == [e.event_id for e in backward]
+
+
+def test_both_payload_shapes_produce_the_same_event_id():
+    """The list contract and the shipped mapping contract are two spellings of one
+    fact; the identity hash must not notice the difference."""
+    from_list = delta.diff_player_stats(stats(), stats(stat()), NOW)[0]
+    from_mapping = delta.diff_player_stats(l2_stats(), l2_stats(l2_stat_line()), NOW)[0]
+    assert from_list.event_id == from_mapping.event_id
+
+
 def test_naive_now_is_treated_as_utc():
     ev = delta.diff_player_stats(stats(), stats(stat()), datetime(2026, 9, 14, 23, 41, 0))[0]
     assert ev.ts == "2026-09-14T23:41:00Z"
