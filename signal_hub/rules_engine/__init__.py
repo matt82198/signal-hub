@@ -31,6 +31,7 @@ from .errors import (
     RuleValidationError,
     TemplateError,
 )
+from .loader import LoadResult, Rule, ThrottleSpec, load_rules, parse_rule
 from .paths import MISSING, is_path, resolve_path, validate_path
 from .predicates import COMPARATORS, LOGICAL, OPERATORS, compile_predicate
 from .template import collect_placeholders, render_template
@@ -41,13 +42,16 @@ __all__ = [
     "DEFAULT_WINDOW",
     "DurationError",
     "LOGICAL",
+    "LoadResult",
     "MISSING",
     "OPERATORS",
     "PathError",
     "PredicateError",
+    "Rule",
     "RuleValidationError",
     "RulesError",
     "TemplateError",
+    "ThrottleSpec",
     "ThrottleState",
     "WINDOWS",
     "bucket_id",
@@ -55,7 +59,9 @@ __all__ = [
     "compile_predicate",
     "format_timestamp",
     "is_path",
+    "load_rules",
     "parse_duration",
+    "parse_rule",
     "parse_window",
     "render_template",
     "resolve_path",

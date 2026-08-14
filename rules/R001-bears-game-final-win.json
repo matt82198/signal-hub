@@ -1,0 +1,36 @@
+{
+  "rule_id": "R001-bears-game-final-win",
+  "enabled": true,
+  "why": "A Bears win is the single highest-signal content trigger in the ecosystem; a final score is settled fact, so the highlight task should exist before anyone opens a session.",
+  "notes": "gamehighlight and playernarrative are status:design in passive-income-dev (contract and slots, no fills), so this enqueues a CANDIDATE task. A consumer that finds the template unfillable moves it to failed/ with reason 'template-not-ready'. That visible backlog signal is worth more than suppressing the rule until the template ships.",
+  "on": {
+    "type": "game_final",
+    "where": {
+      "all": [
+        {"==": ["event.payload.winner", "CHI"]},
+        {"in": ["event.payload.game_type", ["REG", "POST"]]}
+      ]
+    }
+  },
+  "throttle": {
+    "key": ["rule_id", "event.entities.game.id"],
+    "window": "forever"
+  },
+  "action": {
+    "kind": "enqueue_task",
+    "priority": 90,
+    "ttl": "2d",
+    "task": {
+      "kind": "instantiate_template",
+      "template": "gamehighlight",
+      "fallback_template": "playernarrative",
+      "account": "ballmoments_main",
+      "needs_footage": true,
+      "fills_hints": {
+        "game": "{{event.entities.game.id}}",
+        "opponent": "{{event.payload.opponent}}",
+        "final_score": "{{event.payload.final_score}}"
+      }
+    }
+  }
+}

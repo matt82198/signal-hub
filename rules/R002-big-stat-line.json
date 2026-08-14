@@ -1,0 +1,41 @@
+{
+  "rule_id": "R002-big-stat-line",
+  "enabled": true,
+  "why": "A standout individual line is the only per-player content trigger available from settled nflverse data, and it is the trigger with the shortest shelf life.",
+  "notes": "goodperformance is status:design in passive-income-dev, so this enqueues a CANDIDATE task (see R001 notes). The one-per-player-per-day throttle is what stops a Sunday slate from becoming a dozen tasks for the same athlete; the identity hash on (player, game) is what stops an nflverse stat correction from firing a second one.",
+  "on": {
+    "type": "player_stat_line",
+    "where": {
+      "all": [
+        {"in": ["event.payload.game_type", ["REG", "POST"]]},
+        {
+          "any": [
+            {">=": ["event.payload.passing_yards", 300]},
+            {">=": ["event.payload.rushing_yards", 100]},
+            {">=": ["event.payload.receiving_yards", 100]},
+            {">=": ["event.payload.total_tds", 3]}
+          ]
+        }
+      ]
+    }
+  },
+  "throttle": {
+    "key": ["rule_id", "event.entities.player.id"],
+    "window": "1d"
+  },
+  "action": {
+    "kind": "enqueue_task",
+    "priority": 70,
+    "ttl": "3d",
+    "task": {
+      "kind": "instantiate_template",
+      "template": "goodperformance",
+      "account": "ballmoments_main",
+      "fills_hints": {
+        "player": "{{event.entities.player.name}}",
+        "game": "{{event.entities.game.id}}",
+        "headline": "{{event.payload.passing_yards}} yds, {{event.payload.passing_tds}} TD"
+      }
+    }
+  }
+}
