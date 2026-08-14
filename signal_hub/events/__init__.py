@@ -24,8 +24,13 @@ from signal_hub.events.delta import (
     diff_snapshots,
     diff_trend_indicator,
 )
+from signal_hub.events.log import EventLog, record_events
+from signal_hub.events.seen import SeenIndex
 
 __all__ = [
+    "EventLog",
+    "SeenIndex",
+    "record_events",
     "EVENT_TYPES",
     "IDENTITY_TUPLES",
     "Event",
