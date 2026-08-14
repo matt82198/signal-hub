@@ -23,6 +23,7 @@ from .durations import (
     parse_duration,
     parse_window,
 )
+from .engine import EvaluationResult, RuleEngine
 from .errors import (
     DurationError,
     PathError,
@@ -41,6 +42,7 @@ __all__ = [
     "COMPARATORS",
     "DEFAULT_WINDOW",
     "DurationError",
+    "EvaluationResult",
     "LOGICAL",
     "LoadResult",
     "MISSING",
@@ -48,6 +50,7 @@ __all__ = [
     "PathError",
     "PredicateError",
     "Rule",
+    "RuleEngine",
     "RuleValidationError",
     "RulesError",
     "TemplateError",

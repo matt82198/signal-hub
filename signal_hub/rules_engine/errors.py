@@ -1,7 +1,7 @@
 """Exception types for the signal-hub rules engine.
 
-Every error carries a *location* — a dotted breadcrumb such as
-``on.where.all[1].any[0]`` — so a malformed rule file produces a message a human
+Every error carries a *location* - a dotted breadcrumb such as
+``on.where.all[1].any[0]`` - so a malformed rule file produces a message a human
 can act on without opening a debugger.
 """
 

@@ -15,7 +15,7 @@ Grammar (every node is a JSON object with exactly one key)::
 
 Rules:
 
-* ``matches`` is **fnmatch glob, not regex** — no ReDoS surface.
+* ``matches`` is **fnmatch glob, not regex** - no ReDoS surface.
 * A path that resolves to nothing yields ``MISSING``, and *every* comparison
   involving ``MISSING`` is ``False``.  Absent data can never satisfy a rule.
 * Type mismatches are ``False``, never exceptions.  ``True`` is not ``1``.

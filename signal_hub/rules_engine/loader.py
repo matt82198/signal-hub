@@ -107,9 +107,37 @@ class Rule:
         "source", "raw",
     )
 
-    def __init__(self, **fields):
-        for name in self.__slots__:
-            setattr(self, name, fields.get(name))
+    def __init__(
+        self,
+        rule_id,
+        enabled,
+        why,
+        event_type,
+        action_kind,
+        priority,
+        task,
+        notes=None,
+        predicate=None,
+        throttle=None,
+        ttl=None,
+        ttl_seconds=None,
+        source=None,
+        raw=None,
+    ):
+        self.rule_id = rule_id
+        self.enabled = enabled
+        self.why = why
+        self.notes = notes
+        self.event_type = event_type
+        self.predicate = predicate
+        self.throttle = throttle
+        self.action_kind = action_kind
+        self.priority = priority
+        self.ttl = ttl
+        self.ttl_seconds = ttl_seconds
+        self.task = task
+        self.source = source
+        self.raw = raw
 
     def matches(self, event):
         """True when *event* is this rule's type and satisfies its predicate."""

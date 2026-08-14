@@ -1,6 +1,6 @@
 """``{{event.path}}`` substitution for rule actions.
 
-Substitution only.  No arithmetic, no function calls, no filters, no code — the
+Substitution only.  No arithmetic, no function calls, no filters, no code - the
 same resolver the predicates use, applied to the strings inside an action's
 ``task`` block.
 
