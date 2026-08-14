@@ -491,7 +491,7 @@ def test_to_dict_matches_the_design_schema_exactly():
 
 def test_to_json_is_one_ascii_line():
     ev = delta.diff_player_stats(
-        stats(), stats(stat(player_name="Jose Pená")), NOW
+        stats(), stats(stat(player_name="Jose Pen" + chr(0xF1) + "a")), NOW
     )[0]
     line = ev.to_json()
     assert "\n" not in line

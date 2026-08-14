@@ -69,7 +69,7 @@ def test_append_is_one_json_line_per_event(tmp_path):
 def test_append_writes_lf_only_and_ascii_only(tmp_path):
     """Binary append: no CRLF translation on Windows, no mojibake in a name field."""
     log = make_log(tmp_path)
-    log.append(make_event(player_name="Jose Pená"))
+    log.append(make_event(player_name="Jose Pen" + chr(0xF1) + "a"))
     raw = (tmp_path / "state" / "events" / "2026-09-14.jsonl").read_bytes()
     assert b"\r" not in raw
     raw.decode("ascii")
