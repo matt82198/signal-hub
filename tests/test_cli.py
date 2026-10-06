@@ -14,10 +14,25 @@ from pathlib import Path
 import pytest
 
 from signal_hub import cli
+from signal_hub import queue as queue_mod
 from signal_hub.queue import enqueue_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 T0 = datetime(2026, 9, 15, 3, 30, 0, tzinfo=timezone.utc)
+
+
+def freeze_queue_clock(monkeypatch, when=T0):
+    """Pin ``signal_hub.queue``'s ``system_now`` seam to ``when``.
+
+    The CLI's ``queue claim/fail`` path has no ``--now`` flag (it is the real
+    production entrypoint and must read the wall clock there), so a claim
+    round trip driven through ``cli.main`` against a task seeded at a fixed
+    ``T0`` has to pin the queue module's clock the same way the rest of this
+    suite injects ``FrozenClock`` -- otherwise the task's ``expires_at``
+    drifts into the past as real time moves on and every claim reports the
+    task expired.
+    """
+    monkeypatch.setattr(queue_mod, "system_now", lambda: when)
 
 
 def seed_task(root, rule_id="R001-bears-game-final-win", event_id="a3f91c2e8b7d4506"):
@@ -78,7 +93,8 @@ def test_queue_list_json(tmp_path, capsys):
     assert [t["task_id"] for t in payload] == [task_id]
 
 
-def test_queue_claim_complete_round_trip(tmp_path, capsys):
+def test_queue_claim_complete_round_trip(tmp_path, capsys, monkeypatch):
+    freeze_queue_clock(monkeypatch, T0 + timedelta(hours=1))
     task_id = seed_task(tmp_path)
 
     assert cli.main(["queue", "claim", task_id, "--root", str(tmp_path)]) == 0
@@ -91,7 +107,8 @@ def test_queue_claim_complete_round_trip(tmp_path, capsys):
     assert files(tmp_path, "consumed") == ["%s.task.json" % task_id]
 
 
-def test_queue_fail_records_the_reason(tmp_path):
+def test_queue_fail_records_the_reason(tmp_path, monkeypatch):
+    freeze_queue_clock(monkeypatch, T0 + timedelta(hours=1))
     task_id = seed_task(tmp_path)
     cli.main(["queue", "claim", task_id, "--root", str(tmp_path)])
     assert (
@@ -116,7 +133,8 @@ def test_queue_claim_of_a_missing_task_fails_loudly(tmp_path, capsys):
     assert "nope" in capsys.readouterr().err
 
 
-def test_queue_accepts_the_full_filename_too(tmp_path):
+def test_queue_accepts_the_full_filename_too(tmp_path, monkeypatch):
+    freeze_queue_clock(monkeypatch, T0 + timedelta(hours=1))
     task_id = seed_task(tmp_path)
     assert (
         cli.main(
