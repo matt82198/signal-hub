@@ -95,8 +95,15 @@ def test_queue_claim_rename_mutex():
         with open(task_file, "w") as f:
             json.dump(task_data, f)
 
+        # Pin the clock inside the task's created_at/expires_at window --
+        # this fixture's dates are fixed strings, so without an injected
+        # ``now`` the real wall clock eventually drifts past expires_at and
+        # claim_task correctly (if confusingly) reports the task expired.
+        # See test_queue_expires_at_honored below for the same pattern.
+        now = datetime(2026, 9, 15, 0, 0, 0, tzinfo=timezone.utc)
+
         # Claim should succeed
-        result = claim_task(queue_dir, task_file.name)
+        result = claim_task(queue_dir, task_file.name, now=now)
         assert result is not None
         assert result["status"] == "claimed"
 
@@ -105,7 +112,7 @@ def test_queue_claim_rename_mutex():
         assert (queue_dir / "claimed" / task_file.name).exists()
 
         # Second claim should fail cleanly (already claimed)
-        result2 = claim_task(queue_dir, task_file.name)
+        result2 = claim_task(queue_dir, task_file.name, now=now)
         assert result2 is None  # Lost the race
 
 
