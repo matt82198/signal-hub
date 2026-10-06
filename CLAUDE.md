@@ -105,5 +105,13 @@ override with `conductor_queue_path=` when calling `process_delivery` directly (
 override it). A live orchestrator session watches that file with `Monitor` instead of polling
 GitHub or signal-hub's own `queue/` directory.
 
-Durable hosting is not installed by this change — see STATE.md "GitHub webhook receiver —
-service design" for the scheduled-task plan, port, logs and how `state/.HALT` stops it.
+`GET /healthz` is an unauthenticated liveness probe (`HEALTHZ_PATH`) — 200 if the process is
+up, nothing else; it touches no state and is distinct from `state/.signal-hub-webhook-heartbeat`
+(per-delivery pipeline health).
+
+Durable hosting: `deploy/install_tunnel.ps1` / `deploy/uninstall_tunnel.ps1` (one command each,
+`-DryRun` previews everything) create the named Cloudflare Tunnel `aesop-hooks`, route
+`hooks.dynastywrapped.com` -> `http://127.0.0.1:8787`, install cloudflared as a Windows service,
+and register the receiver as scheduled task `AesopSignalHubReceiver` — see `deploy/README.md`
+for the two one-time human steps and STATE.md "GitHub webhook receiver — service design" for the
+original plan these scripts implement.
