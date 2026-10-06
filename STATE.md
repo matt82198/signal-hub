@@ -14,6 +14,25 @@ contract. 592 tests total (558 pre-existing + 34 new); the 4 pre-existing
 `test_queue.py`/`test_cli.py` claim-race failures are a baseline flake unconnected to
 this change (reproduced on `origin/master` before this branch existed).
 
+Phase 2 of the bridge (durable hostname + tunnel install) landed on
+`feat/tunnel-install` (2026-10-06): the hostname decision is made --
+`hooks.dynastywrapped.com` (zone `dynastywrapped.com`, registrar GoDaddy, not
+yet switched to Cloudflare nameservers as of this writing), named tunnel
+`aesop-hooks` (not `signal-hub-webhook` as this file's earlier sketch named
+it -- renamed here, not two tunnels). `deploy/install_tunnel.ps1` /
+`deploy/uninstall_tunnel.ps1` implement the "two commands are the whole
+wiring" plan above end to end, including the Windows-service + scheduled-task
+durability this section asked for and a new `GET /healthz` liveness route on
+the receiver (`HEALTHZ_PATH` in `webhook_receiver.py`) so the installer can
+verify local-and-through-tunnel reachability without a signed payload. 631
+tests total (592 pre-existing + 2 healthz + 19 for the two deploy scripts via
+`-DryRun`); the same 4 pre-existing claim-race failures remain, still
+unconnected to this change. See `deploy/README.md` for the two remaining
+human steps (switch nameservers, `cloudflared tunnel login`) and the one
+command that finishes it. Not yet run for real on this box -- cert.pem is not
+present and the zone has not been moved to Cloudflare nameservers yet, so the
+installer has never executed past its prerequisite gate.
+
 ## GitHub webhook receiver — service design (report; NOT installed by this change)
 
 **How it should run durably on this box:**
@@ -82,7 +101,10 @@ tunnel step never ran, so there was nothing to delete).
 1. Lanes land -> merge train with test proof -> L7 integration -> task installer.
 2. Register scheduled task (user-visible change, announce), ECOSYSTEM.md row.
 3. Preseason dry-run week: --include-preseason, verify events flow, no task fires.
-4. Phase 2 of the webhook bridge (not started): pick the durable hostname, install
-   cloudflared, register the scheduled task for `webhook_receiver.py`, and swap the
-   `R-gh-002` auto-merge-armed proxy for a real check once a PR-fetch step (or the
-   GraphQL `autoMergeRequest` field) is wired in.
+4. Phase 2 of the webhook bridge: hostname picked and install automation built
+   (`deploy/install_tunnel.ps1`/`uninstall_tunnel.ps1`, see above) but NOT yet run
+   for real -- do the two human steps in `deploy/README.md`, then
+   `.\deploy\install_tunnel.ps1`, then register the real GitHub webhook
+   (`gh api repos/<owner>/<repo>/hooks ...`, command in STATE.md above).
+5. Swap the `R-gh-002` auto-merge-armed proxy for a real check once a PR-fetch
+   step (or the GraphQL `autoMergeRequest` field) is wired in.

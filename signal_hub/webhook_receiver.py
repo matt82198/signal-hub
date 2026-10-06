@@ -71,6 +71,7 @@ __all__ = [
     "SECRET_ENV_VAR",
     "SECRET_FILENAME",
     "HEARTBEAT_FILE",
+    "HEALTHZ_PATH",
     "DeliveryOutcome",
     "load_webhook_secret",
     "verify_signature",
@@ -95,6 +96,11 @@ THROTTLE_FILE = ".rules-fired.jsonl"
 
 DEFAULT_PORT = 8787
 DEFAULT_PATH = "/github"
+#: Unauthenticated liveness probe -- "is the process up and listening", not
+#: "is the pipeline healthy" (that is state/.signal-hub-webhook-heartbeat).
+#: Exists so a tunnel/service installer can verify end-to-end reachability
+#: without needing a signed payload. Touches no state, logs nothing new.
+HEALTHZ_PATH = "/healthz"
 
 _SIG_PREFIX = "sha256="
 
@@ -479,6 +485,12 @@ def _make_handler(root, *, now, rules_dir, conductor_queue_path, path):
                 conductor_queue_path=conductor_queue_path,
             )
             self._reply(outcome.status_code, outcome.reason)
+
+        def do_GET(self):  # noqa: N802 (stdlib naming)
+            if self.path == HEALTHZ_PATH:
+                self._reply(200, "ok")
+                return
+            self._reply(404, "not found")
 
         def _reply(self, code, reason):
             body = json.dumps({"status": reason}).encode("utf-8")
