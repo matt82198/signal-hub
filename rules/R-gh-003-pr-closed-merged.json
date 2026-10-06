@@ -1,0 +1,25 @@
+{
+  "rule_id": "R-gh-003-pr-closed-merged",
+  "enabled": true,
+  "why": "A merged PR is the trigger for the tracker's auto-close path -- the item it closes should stop showing as open the instant GitHub reports the merge.",
+  "notes": "on.type pins the action to 'closed' via the event type itself; 'merged' still must be checked because GitHub fires pull_request.closed for abandoned (unmerged) PRs too.",
+  "on": {
+    "type": "github.pull_request.closed",
+    "where": {"==": ["event.payload.merged", true]}
+  },
+  "throttle": {
+    "key": ["rule_id", "event.entities.pull_request.id"],
+    "window": "forever"
+  },
+  "action": {
+    "kind": "enqueue_task",
+    "priority": 60,
+    "ttl": "3d",
+    "task": {
+      "kind": "run_workflow",
+      "workflow": "aesop.tracker_autoclose",
+      "repo": "{{event.payload.repo}}",
+      "number": "{{event.payload.number}}"
+    }
+  }
+}

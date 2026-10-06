@@ -1,0 +1,33 @@
+{
+  "rule_id": "R-gh-001-main-full-failed",
+  "enabled": true,
+  "why": "A failed workflow run on main is a RED CI escape; gate-escape-resolver must see it the instant GitHub reports it, not on the next idle-tick poll.",
+  "notes": "Phase 1 of the GitHub webhook bridge. task.kind is run_workflow because there is no headless drainer yet (design section 5) -- an aesop session (or a future drainer) runs the named workflow with these args.",
+  "on": {
+    "type": "github.workflow_run.completed",
+    "where": {
+      "all": [
+        {"==": ["event.payload.conclusion", "failure"]},
+        {"==": ["event.payload.head_branch", "main"]}
+      ]
+    }
+  },
+  "throttle": {
+    "key": ["rule_id", "event.entities.workflow_run.id"],
+    "window": "forever"
+  },
+  "action": {
+    "kind": "enqueue_task",
+    "priority": 95,
+    "ttl": "1d",
+    "task": {
+      "kind": "run_workflow",
+      "workflow": "aesop.gate_escape",
+      "repo": "{{event.payload.repo}}",
+      "workflow_name": "{{event.payload.workflow}}",
+      "run_id": "{{event.payload.run_id}}",
+      "head_sha": "{{event.payload.head_sha}}",
+      "html_url": "{{event.payload.html_url}}"
+    }
+  }
+}

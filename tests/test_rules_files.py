@@ -1,14 +1,20 @@
-"""The three MVP rule files are data, so they get tested like data.
+"""The shipped rule files are data, so they get tested like data.
 
-Design section 4, "The 3 MVP rules":
+Design section 4, "The 3 MVP rules" (sports, tick-sourced):
 
   R001-bears-game-final-win  game_final, CHI won, REG/POST -> gamehighlight task
   R002-big-stat-line         300 pass / 100 rush / 100 rec / 3 TD -> goodperformance task
   R003-demand-spike          demand delta >= 0.15 and score >= 0.6 -> steer notify
 
-Every rule filters out preseason (design section 8, risk 2): PRE stat lines are
-backups and PRE rosters churn, so the pipeline may run end-to-end in August
-without firing a single content task.
+Every sports rule filters out preseason (design section 8, risk 2): PRE stat
+lines are backups and PRE rosters churn, so the pipeline may run end-to-end in
+August without firing a single content task.
+
+Phase 1 of the GitHub webhook bridge (webhook-sourced) added three more:
+
+  R-gh-001-main-full-failed       workflow_run completed failure on main -> gate_escape
+  R-gh-002-pr-check-suite-green   check_suite completed success w/ PR -> merge_eligible
+  R-gh-003-pr-closed-merged       pull_request closed+merged -> tracker_autoclose
 """
 
 import json
@@ -21,6 +27,9 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RULES_DIR = os.path.join(REPO_ROOT, "rules")
 
 EXPECTED_IDS = [
+    "R-gh-001-main-full-failed",
+    "R-gh-002-pr-check-suite-green",
+    "R-gh-003-pr-closed-merged",
     "R001-bears-game-final-win",
     "R002-big-stat-line",
     "R003-demand-spike",
@@ -74,8 +83,8 @@ class LoadTests(unittest.TestCase):
         self.assertEqual(self.result.errors, [])
         self.assertEqual([rule.rule_id for rule in self.result.rules], EXPECTED_IDS)
 
-    def test_all_three_are_enabled(self):
-        self.assertEqual(len(self.result.enabled_rules), 3)
+    def test_all_rules_are_enabled(self):
+        self.assertEqual(len(self.result.enabled_rules), 6)
 
     def test_every_rule_explains_itself(self):
         # Design section 8, risk 8: rule sprawl is the failure mode, so a rule
@@ -272,7 +281,17 @@ class CrossRuleTests(unittest.TestCase):
 
     def test_each_rule_owns_a_distinct_event_type(self):
         types = [rule.event_type for rule in self.rules]
-        self.assertEqual(sorted(types), ["demand_rank_delta", "game_final", "player_stat_line"])
+        self.assertEqual(
+            sorted(types),
+            [
+                "demand_rank_delta",
+                "game_final",
+                "github.check_suite.completed",
+                "github.pull_request.closed",
+                "github.workflow_run.completed",
+                "player_stat_line",
+            ],
+        )
 
     def test_no_rule_matches_a_junk_event(self):
         for junk in ({}, {"type": None}, {"type": "player_stat_line"}, None, [], "x"):
