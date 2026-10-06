@@ -1,0 +1,32 @@
+{
+  "rule_id": "R-gh-002-pr-check-suite-green",
+  "enabled": true,
+  "why": "A green check suite on a PR is the informational signal that native auto-merge can go; the merge itself is done by GitHub's own auto-merge, never by this rule.",
+  "notes": "Phase 1 limitation: the check_suite webhook payload's pull_requests[] does not carry the PR's auto_merge state, so this predicates on conclusion==success and at least one associated PR (pr_count>0) rather than a true auto-merge-armed check. Purely informational -- task.kind run_workflow enqueues aesop.merge_eligible as a heads-up, nothing acts on it.",
+  "on": {
+    "type": "github.check_suite.completed",
+    "where": {
+      "all": [
+        {"==": ["event.payload.conclusion", "success"]},
+        {">": ["event.payload.pr_count", 0]}
+      ]
+    }
+  },
+  "throttle": {
+    "key": ["rule_id", "event.entities.check_suite.id"],
+    "window": "forever"
+  },
+  "action": {
+    "kind": "enqueue_task",
+    "priority": 40,
+    "ttl": "6h",
+    "task": {
+      "kind": "run_workflow",
+      "workflow": "aesop.merge_eligible",
+      "repo": "{{event.payload.repo}}",
+      "check_suite_id": "{{event.payload.check_suite_id}}",
+      "pr_numbers": "{{event.payload.pr_numbers}}",
+      "head_sha": "{{event.payload.head_sha}}"
+    }
+  }
+}

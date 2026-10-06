@@ -128,7 +128,7 @@ def test_cold_start_still_writes_status_and_heartbeat(tmp_path):
 
     status = read_status(tmp_path)
     assert status["mode"] in ("game_window", "idle")
-    assert status["rules"]["loaded"] == 3
+    assert status["rules"]["loaded"] == 6
     assert status["rules"]["invalid"] == 0
     # Heartbeat is written at the END of a completed tick, never at the start.
     assert (tmp_path / "state" / ".signal-hub-heartbeat").is_file()
@@ -197,7 +197,7 @@ def test_e2e_bears_win_fires_r001_once_and_second_tick_refires_nothing(tmp_path)
 
     status = read_status(tmp_path)
     assert status["queue"]["pending"] == 1
-    assert status["rules"]["loaded"] == 3
+    assert status["rules"]["loaded"] == 6
 
 
 def test_status_json_is_coherent_after_a_firing_tick(tmp_path):

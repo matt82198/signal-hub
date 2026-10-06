@@ -63,3 +63,47 @@ worse than no task, so an expired task moves to `failed/` without executing, and
 Templates `gamehighlight` / `goodperformance` are `status: design` in passive-income-dev, so
 R001/R002 enqueue **candidate** tasks; fail them with `--reason template-not-ready` rather
 than disabling the rule — the visible backlog is the point.
+
+## GitHub webhook receiver (Phase 1 of the box event bridge)
+
+`signal_hub/webhook_receiver.py` is a second, independent producer into the same event log
+and rules engine `tick.py` uses — webhook-sourced instead of poll-sourced, same dedup domains
+(`state/events/*.jsonl`, `state/.events-seen`, `state/.rules-fired.jsonl`), same heartbeat
+discipline (written LAST), own heartbeat file `state/.signal-hub-webhook-heartbeat`.
+
+```
+python -m signal_hub.webhook_receiver [--port 8787] [--root DIR]
+```
+
+`POST /github` only. Verifies `X-Hub-Signature-256` (HMAC-SHA256, secret from
+`SIGNAL_HUB_GH_WEBHOOK_SECRET` env var or `state/.github-webhook-secret`, never committed) —
+unsigned/invalid is 401 and touches no state. Dedups on `X-GitHub-Delivery` via a second
+`SeenIndex` rooted at `state/webhook-deliveries/`. Builds exactly one typed event per
+delivery (`github.workflow_run.completed`, `github.check_suite.completed`,
+`github.pull_request.<action>`, `github.push`), appends it, evaluates it against `rules/`
+inline (no 5-minute wait), enqueues any fired task into `queue/` exactly like `tick.py` does.
+Binds to `127.0.0.1` only — a tunnel or reverse proxy terminates the public side; see
+STATE.md for the durable-tunnel commands (none registered yet — that's a hostname decision
+for Matt).
+
+Three rules at Phase 1 (`rules/R-gh-00{1,2,3}-*.json`), all `task.kind: run_workflow` since
+there is still no headless drainer — an aesop session (or a future drainer) runs the named
+workflow:
+
+* `R-gh-001-main-full-failed` — `workflow_run.completed`, `conclusion==failure` on `main` ->
+  `aesop.gate_escape` (run_id, head_sha, html_url).
+* `R-gh-002-pr-check-suite-green` — `check_suite.completed`, `conclusion==success` with at
+  least one associated PR -> `aesop.merge_eligible`, informational only (native GitHub
+  auto-merge does the actual merge; the webhook payload cannot see a PR's `auto_merge` flag,
+  so this is a `pr_count>0` proxy, not a true armed-check — documented in the rule's `notes`).
+* `R-gh-003-pr-closed-merged` — `pull_request.closed` with `merged==true` ->
+  `aesop.tracker_autoclose` (PR number) — consumer is the tracker auto-close path.
+
+**Orchestrator wake-up mirror**: every task this receiver enqueues is ALSO appended
+(append-only, one JSON line per task) to `~/conductor3/state/signal-hub-queue.jsonl` —
+override with `conductor_queue_path=` when calling `process_delivery` directly (tests always
+override it). A live orchestrator session watches that file with `Monitor` instead of polling
+GitHub or signal-hub's own `queue/` directory.
+
+Durable hosting is not installed by this change — see STATE.md "GitHub webhook receiver —
+service design" for the scheduled-task plan, port, logs and how `state/.HALT` stops it.
